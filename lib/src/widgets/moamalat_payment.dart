@@ -467,6 +467,7 @@ class _MoamalatPaymentState extends State<MoamalatPayment> {
                 controller.addJavaScriptHandler(
                   handlerName: 'error',
                   callback: (args) {
+                    log("Error args received: $args");
                     handleError(args[0]);
                   },
                 );
@@ -474,7 +475,7 @@ class _MoamalatPaymentState extends State<MoamalatPayment> {
                 controller.addJavaScriptHandler(
                   handlerName: 'sucsses',
                   callback: (args) {
-                    log("This is args received $args");
+                    log("Success args received: $args");
                     handleComplete(args[0]);
                   },
                 );
@@ -537,30 +538,43 @@ class _MoamalatPaymentState extends State<MoamalatPayment> {
   /// Returns [MoamalatTransactionSuccess] object with parsed transaction details
   ///
   /// **Note**: Automatically invokes [onCompleteSucsses] callback
-  MoamalatTransactionSuccess handleComplete(String message) {
-    Map<String, dynamic> successObject = json.decode(message);
+  MoamalatTransactionSuccess? handleComplete(dynamic message) {
+    try {
+      Map<String, dynamic> successObject;
+      if (message is String) {
+        successObject = json.decode(message);
+      } else if (message is Map) {
+        successObject = Map<String, dynamic>.from(message);
+      } else {
+        log("Unknown message format: $message");
+        return null;
+      }
 
-    // Parse the response into a `Transaction` instance
-    MoamalatTransactionSuccess transaction = MoamalatTransactionSuccess(
-      txnDate: successObject['TxnDate'],
-      systemReference: successObject['SystemReference'],
-      networkReference: successObject['NetworkReference'],
-      merchantReference: successObject['MerchantReference'],
-      amount: double.parse(successObject['Amount']),
-      currency: successObject['Currency'],
-      paidThrough: successObject['PaidThrough'],
-      payerAccount: successObject['PayerAccount'],
-      payerName: successObject['PayerName'],
-      providerSchemeName: successObject['ProviderSchemeName'],
-      secureHash: successObject['SecureHash'],
-      displayData: successObject['DisplayData'],
-      tokenCustomerId: successObject['TokenCustomerId'],
-      tokenCard: successObject['TokenCard'],
-    );
+      // Parse the response into a `Transaction` instance
+      MoamalatTransactionSuccess transaction = MoamalatTransactionSuccess(
+        txnDate: successObject['TxnDate'] ?? successObject['TrxDateTime'],
+        systemReference: successObject['SystemReference'],
+        networkReference: successObject['NetworkReference'],
+        merchantReference: successObject['MerchantReference'],
+        amount: double.tryParse(successObject['Amount']?.toString() ?? '0') ?? 0.0,
+        currency: successObject['Currency'],
+        paidThrough: successObject['PaidThrough'],
+        payerAccount: successObject['PayerAccount'],
+        payerName: successObject['PayerName'],
+        providerSchemeName: successObject['ProviderSchemeName'],
+        secureHash: successObject['SecureHash'],
+        displayData: successObject['DisplayData'],
+        tokenCustomerId: successObject['TokenCustomerId'],
+        tokenCard: successObject['TokenCard'],
+      );
 
-    widget.onCompleteSucsses(transaction);
+      widget.onCompleteSucsses(transaction);
 
-    return transaction;
+      return transaction;
+    } catch (e, stackTrace) {
+      log("Error parsing success transaction: $e\\n$stackTrace");
+      return null;
+    }
   }
 
   /// Handles payment errors and failures from the WebView.
@@ -585,17 +599,24 @@ class _MoamalatPaymentState extends State<MoamalatPayment> {
   /// Returns [MoamalatTransactionFailed] object with parsed error data, or null if parsing fails
   ///
   /// **Note**: Automatically invokes [onError] callback when error is successfully parsed
-  MoamalatTransactionFailed? handleError(String consoleMessage) {
+  MoamalatTransactionFailed? handleError(dynamic consoleMessage) {
     try {
-      // Parse the JSON error response
-      Map<String, dynamic> errorObject = json.decode(consoleMessage);
+      Map<String, dynamic> errorObject;
+      if (consoleMessage is String) {
+        errorObject = json.decode(consoleMessage);
+      } else if (consoleMessage is Map) {
+        errorObject = Map<String, dynamic>.from(consoleMessage);
+      } else {
+        log("Unknown error message format: $consoleMessage");
+        return null;
+      }
 
       // Extract error details from the response
-      String errorMessage = errorObject['error'];
-      String amount = errorObject['Amount'];
-      String merchantReference = errorObject['MerchantReferenece'];
-      String dateTimeLocalTrxn = errorObject['DateTimeLocalTrxn'];
-      String secureHash = errorObject['SecureHash'];
+      String errorMessage = errorObject['error']?.toString() ?? 'Unknown error';
+      String amount = errorObject['Amount']?.toString() ?? '';
+      String merchantReference = errorObject['MerchantReferenece']?.toString() ?? '';
+      String dateTimeLocalTrxn = errorObject['DateTimeLocalTrxn']?.toString() ?? '';
+      String secureHash = errorObject['SecureHash']?.toString() ?? '';
 
       // Create PaymentError instance with parsed data
       MoamalatTransactionFailed paymentError = MoamalatTransactionFailed(
@@ -610,7 +631,8 @@ class _MoamalatPaymentState extends State<MoamalatPayment> {
       widget.onError(paymentError);
 
       return paymentError;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      log("Error parsing error transaction: $e\\n$stackTrace");
       // Return null if JSON parsing fails
       // This allows the calling code to handle malformed error responses
       return null;
