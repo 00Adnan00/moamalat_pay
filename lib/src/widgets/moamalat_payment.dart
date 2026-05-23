@@ -496,10 +496,11 @@ class _MoamalatPaymentState extends State<MoamalatPayment> {
           ),
           // Loading indicator overlay
           if (_isLoading && widget.loadingBuilder != null)
-            widget.loadingBuilder!(context, _progress),
+            Positioned.fill(child: widget.loadingBuilder!(context, _progress)),
 
           // Error indicator overlay
-          if (_isError && widget.errorBuilder != null) widget.errorBuilder!(context, _retry),
+          if (_isError && widget.errorBuilder != null)
+            Positioned.fill(child: widget.errorBuilder!(context, _retry)),
         ],
       ),
     );
